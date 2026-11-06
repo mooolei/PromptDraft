@@ -1,0 +1,37 @@
+[
+  {
+    "id": "Markdig",
+    "version": "1.3.2",
+    "file": "Markdig.dll",
+    "entry": "lib/net462/Markdig.dll",
+    "sha256": "b1b60b1e894ef7e9282781b925a1e97e9dd62633d4ba2b5510019fdd0f0ad3e0"
+  },
+  {
+    "id": "System.Memory",
+    "version": "4.6.3",
+    "file": "System.Memory.dll",
+    "entry": "lib/net462/System.Memory.dll",
+    "sha256": "d5e8e4866f9cfa66f7765660f84b210198893e55335487afe5ebda342c0e913d"
+  },
+  {
+    "id": "System.Buffers",
+    "version": "4.6.1",
+    "file": "System.Buffers.dll",
+    "entry": "lib/net462/System.Buffers.dll",
+    "sha256": "2d78d770c9cb997199154ae8c018b9f1d1efbc86729f7264dde6dbad2a12cac3"
+  },
+  {
+    "id": "System.Numerics.Vectors",
+    "version": "4.6.1",
+    "file": "System.Numerics.Vectors.dll",
+    "entry": "lib/net462/System.Numerics.Vectors.dll",
+    "sha256": "20c2fa81b8c70d651099d762954f285fd4f942e63b2d7217c145dab8d4b2f4c9"
+  },
+  {
+    "id": "System.Runtime.CompilerServices.Unsafe",
+    "version": "6.1.2",
+    "file": "System.Runtime.CompilerServices.Unsafe.dll",
+    "entry": "lib/net462/System.Runtime.CompilerServices.Unsafe.dll",
+    "sha256": "08cbd7278b66f1e68425a82d4b97181a4130d93e3dd91831407aba7212ccdacf"
+  }
+]

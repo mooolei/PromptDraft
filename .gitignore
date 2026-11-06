@@ -1,0 +1,31 @@
+# Personal content and runtime preferences (never publish)
+data/
+backups/
+drafts.json*
+view-state.json*
+*.unreadable-*
+
+# Dependencies, builds, caches, and test output
+vendor/
+dist/
+.build/
+.cache/
+TestResults/
+bin/
+obj/
+*.exe
+*.dll
+*.pdb
+*.zip
+
+# Local development settings and credentials
+.vs/
+.idea/
+*.user
+*.suo
+.env
+.env.*
+*.pem
+*.key
+Thumbs.db
+Desktop.ini
