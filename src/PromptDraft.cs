@@ -14,8 +14,8 @@ using Markdig.Syntax.Inlines;
 
 [assembly: System.Reflection.AssemblyTitle("Prompt 草稿与收藏")]
 [assembly: System.Reflection.AssemblyProduct("Prompt 草稿与收藏")]
-[assembly: System.Reflection.AssemblyVersion("1.2.1.0")]
-[assembly: System.Reflection.AssemblyFileVersion("1.2.1.0")]
+[assembly: System.Reflection.AssemblyVersion("1.2.2.0")]
+[assembly: System.Reflection.AssemblyFileVersion("1.2.2.0")]
 
 namespace PromptDraft {
     public class Draft {
@@ -40,7 +40,7 @@ namespace PromptDraft {
     }
 
     public static class MarkdownView {
-        static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder().UsePipeTables().UseTaskLists().UseEmphasisExtras().UseAutoLinks().DisableHtml().Build();
+        static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder().UsePipeTables().UseTaskLists().UseEmphasisExtras().UseAutoLinks().UseSoftlineBreakAsHardlineBreak().DisableHtml().Build();
         public static string Render(string source) {
             var document = Markdown.Parse(source ?? "", Pipeline);
             // The preview is completely offline. Links are readable; images are shown as descriptions.

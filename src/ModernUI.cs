@@ -54,6 +54,38 @@ namespace PromptDraft {
         }
         public static void Set(string html,string plain) { var data=new DataObject();data.SetData(DataFormats.UnicodeText,true,plain);data.SetData(DataFormats.Html,HtmlFormat(html));Clipboard.SetDataObject(data,true,5,80); }
     }
+    // The native Windows EDIT control only displays CRLF as a line break.
+    // Normalize at the editor boundary, without rewriting stored records on load.
+    public class PromptTextBox:TextBox {
+        const int WmPaste=0x302, EmReplaceSel=0xC2;
+        [System.Runtime.InteropServices.DllImport("user32.dll",CharSet=System.Runtime.InteropServices.CharSet.Unicode,EntryPoint="SendMessageW")]
+        static extern IntPtr SendText(IntPtr handle,int message,IntPtr wParam,string text);
+
+        public static string NormalizeLineEndings(string text) {
+            return (text??"").Replace("\r\n","\n").Replace("\r","\n").Replace("\n","\r\n");
+        }
+        public override string Text { get{return base.Text;} set{base.Text=NormalizeLineEndings(value);} }
+        protected virtual string ReadClipboardText(){return Clipboard.GetText(TextDataFormat.UnicodeText);}
+        internal void InsertPastedText(string text) {
+            if(ReadOnly||!Enabled||String.IsNullOrEmpty(text))return;
+            // EM_REPLACESEL with a nonzero wParam preserves native one-step Undo.
+            SendText(Handle,EmReplaceSel,new IntPtr(1),NormalizeLineEndings(text));
+            ScrollToCaret();
+        }
+        void PastePlainText() {
+            if(ReadOnly||!Enabled)return;
+            try{InsertPastedText(ReadClipboardText());}
+            catch(System.Runtime.InteropServices.ExternalException){MessageBox.Show(FindForm(),"剪贴板暂时被其他程序占用，请再试一次。","未粘贴成功");}
+        }
+        protected override bool ProcessCmdKey(ref Message msg,Keys keyData) {
+            if(keyData==(Keys.Control|Keys.V)||keyData==(Keys.Shift|Keys.Insert)){PastePlainText();return true;}
+            return base.ProcessCmdKey(ref msg,keyData);
+        }
+        protected override void WndProc(ref Message message) {
+            if(message.Msg==WmPaste){PastePlainText();return;}
+            base.WndProc(ref message);
+        }
+    }
     public class MainForm:Form {
         readonly DraftStore store; readonly DraftState data;
         readonly ViewStateStore viewStore; readonly WindowViewState viewState;
@@ -133,7 +165,7 @@ namespace PromptDraft {
             viewTools=new Panel{Dock=DockStyle.Fill};var modes=Grid(3,1);for(int i=0;i<3;i++)modes.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,33.33F));readView=Btn("阅读");editView=Btn("编辑");splitView=Btn("对照");editView.Margin=new Padding(4,0,4,0);readView.Click+=delegate{SetView("read");};editView.Click+=delegate{SetView("edit");};splitView.Click+=delegate{SetView("split");};modes.Controls.Add(readView,0,0);modes.Controls.Add(editView,1,0);modes.Controls.Add(splitView,2,0);viewTools.Controls.Add(modes);editorBar.Controls.Add(viewTools,1,0);layout.Controls.Add(editorBar,0,2);
             editorSplit=new SplitContainer{Dock=DockStyle.Fill,Margin=new Padding(0),BackColor=Palette.Canvas,SplitterWidth=14,Panel1MinSize=0,Panel2MinSize=0};layout.Controls.Add(editorSplit,0,3);
             sourceHost=new Panel{Dock=DockStyle.Fill};previewHost=new Panel{Dock=DockStyle.Fill};editorSplit.Panel1.Controls.Add(sourceHost);editorSplit.Panel2.Controls.Add(previewHost);
-            editor=Input("草稿正文");editor.Multiline=true;editor.AcceptsReturn=true;editor.AcceptsTab=true;editor.ScrollBars=ScrollBars.Vertical;editor.WordWrap=true;editor.Font=new Font(Font.FontFamily,12);editor.HideSelection=false;sourceHost.Controls.Add(Frame(editor,new Padding(20,18,10,18)));
+            editor=new PromptTextBox{BorderStyle=BorderStyle.None,Dock=DockStyle.Fill,AccessibleName="草稿正文",ForeColor=Palette.Ink,BackColor=Color.White,MaxLength=0};editor.Multiline=true;editor.AcceptsReturn=true;editor.AcceptsTab=true;editor.ScrollBars=ScrollBars.Vertical;editor.WordWrap=true;editor.Font=new Font(Font.FontFamily,12);editor.HideSelection=false;sourceHost.Controls.Add(Frame(editor,new Padding(20,18,10,18)));
             preview=new WebBrowser{Dock=DockStyle.Fill,AllowWebBrowserDrop=false,IsWebBrowserContextMenuEnabled=false,ScriptErrorsSuppressed=true,WebBrowserShortcutsEnabled=true};
             preview.Navigating+=delegate(object s,WebBrowserNavigatingEventArgs e){if(e.Url.AbsoluteUri!="about:blank")e.Cancel=true;};preview.NewWindow+=delegate(object s,System.ComponentModel.CancelEventArgs e){e.Cancel=true;};preview.DocumentCompleted+=PreviewCompleted;
             previewHost.Controls.Add(Frame(preview,new Padding(1)));

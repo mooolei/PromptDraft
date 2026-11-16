@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.2
+
+- Preserve LF, CRLF and CR line endings when pasting into prompts and AI collections.
+- Display existing LF-based records correctly without rewriting their stored content on load.
+- Keep selection replacement and one-step Undo for keyboard and context-menu paste.
+- Preserve ordinary line breaks in Markdown preview, while keeping code blocks, lists and tables intact.
+- Add native Windows editor and persistence regression tests without touching the system clipboard.
+
 ## 1.2.1
 
 - Fix sidebar repainting that erased neighboring list items.

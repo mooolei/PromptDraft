@@ -11,6 +11,7 @@
 - 多条独立草稿，为不同 Agent 或对话提前准备内容。
 - 按标题、正文和 Agent 搜索；常用内容置顶。
 - AI 收藏支持 **阅读 / 编辑 / 对照**，实时预览 Markdown。
+- 粘贴时保留换行、空行和缩进，兼容网页常用的 LF；阅读预览也保留普通换行。
 - 复制原始 Markdown，或复制排版后的 HTML 与纯文本；阅读区支持选中复制。
 - 自动保存、归档、回收站与恢复。
 - 记住窗口大小、位置、最大化状态，以及每条内容的光标、选区、滚动位置和视图。
@@ -18,7 +19,7 @@
 
 ## 开始使用
 
-在 [Releases](https://github.com/mooolei/PromptDraft/releases) 下载 `PromptDraft-v1.2.1-windows.zip`，解压到有写入权限的文件夹，然后双击 `PromptDraft.exe`。如果没有下载包，可以按下面的步骤自行构建。
+在 [Releases](https://github.com/mooolei/PromptDraft/releases) 下载 `PromptDraft-v1.2.2-windows.zip`，解压到有写入权限的文件夹，然后双击 `PromptDraft.exe`。如果没有下载包，可以按下面的步骤自行构建。
 
 适用于 Windows 10/11，需 .NET Framework 4.8 或更新的兼容运行时。界面目前为中文。下载包中的程序没有代码签名。
 
