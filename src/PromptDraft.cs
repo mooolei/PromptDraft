@@ -14,8 +14,8 @@ using Markdig.Syntax.Inlines;
 
 [assembly: System.Reflection.AssemblyTitle("Prompt 草稿与收藏")]
 [assembly: System.Reflection.AssemblyProduct("Prompt 草稿与收藏")]
-[assembly: System.Reflection.AssemblyVersion("1.2.2.0")]
-[assembly: System.Reflection.AssemblyFileVersion("1.2.2.0")]
+[assembly: System.Reflection.AssemblyVersion("1.3.0.0")]
+[assembly: System.Reflection.AssemblyFileVersion("1.3.0.0")]
 
 namespace PromptDraft {
     public class Draft {
@@ -27,6 +27,7 @@ namespace PromptDraft {
         public bool Deleted { get; set; }
         public bool Pinned { get; set; }
         public string Kind { get; set; }
+        public string Category { get; set; }
         public DateTime Updated { get; set; }
         public Draft() { Id = Guid.NewGuid().ToString("N"); Title = ""; Agent = ""; Body = ""; Kind = "prompt"; Updated = DateTime.Now; }
         public string DisplayTitle {
@@ -63,7 +64,8 @@ namespace PromptDraft {
         public int Version { get; set; }
         public string SelectedId { get; set; }
         public List<Draft> Drafts { get; set; }
-        public DraftState() { Version = 1; Drafts = new List<Draft>(); }
+        public List<string> Categories { get; set; }
+        public DraftState() { Version = 1; Drafts = new List<Draft>(); Categories = new List<string>(); }
     }
     public class DraftStore {
         public readonly string DirectoryPath;
@@ -74,7 +76,8 @@ namespace PromptDraft {
         DraftState Read(string path) {
             var s = Json().Deserialize<DraftState>(File.ReadAllText(path, Encoding.UTF8));
             if (s == null || s.Version != 1 || s.Drafts == null || s.Drafts.Any(d => d == null || String.IsNullOrEmpty(d.Id)) || s.Drafts.Select(d => d.Id).Distinct().Count() != s.Drafts.Count) throw new InvalidDataException("草稿数据格式无法识别。");
-            foreach (var d in s.Drafts) { d.Title = d.Title ?? ""; d.Agent = d.Agent ?? ""; d.Body = d.Body ?? ""; d.Updated = d.Updated.ToLocalTime(); }
+            if(s.Categories==null)s.Categories=new List<string>();
+            foreach (var d in s.Drafts) { d.Title = d.Title ?? ""; d.Agent = d.Agent ?? ""; d.Body = d.Body ?? ""; d.Category = d.Category ?? ""; d.Updated = d.Updated.ToLocalTime(); }
             return s;
         }
         public DraftState Load() {

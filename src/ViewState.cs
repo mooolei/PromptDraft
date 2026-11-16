@@ -25,7 +25,8 @@ namespace PromptDraft {
         public int Height { get; set; }
         public bool Maximized { get; set; }
         public Dictionary<string,DraftViewState> Drafts { get; set; }
-        public WindowViewState(){Drafts=new Dictionary<string,DraftViewState>();}
+        public List<string> CollapsedCategories { get; set; }
+        public WindowViewState(){Drafts=new Dictionary<string,DraftViewState>();CollapsedCategories=new List<string>();}
         public DraftViewState For(string id){DraftViewState value;if(!Drafts.TryGetValue(id,out value)||value==null){value=new DraftViewState();Drafts[id]=value;}return value;}
     }
     public class ViewStateStore {
@@ -34,7 +35,7 @@ namespace PromptDraft {
         public ViewStateStore(string directory){path=Path.Combine(directory,"view-state.json");}
         public WindowViewState Load(){
             foreach(string file in new[]{path,path+".bak"}){
-                try{if(!File.Exists(file))continue;var state=json.Deserialize<WindowViewState>(File.ReadAllText(file,Encoding.UTF8));if(state==null)continue;if(state.Drafts==null)state.Drafts=new Dictionary<string,DraftViewState>();savedJson=file==path?json.Serialize(state):null;return state;}catch{}
+                try{if(!File.Exists(file))continue;var state=json.Deserialize<WindowViewState>(File.ReadAllText(file,Encoding.UTF8));if(state==null)continue;if(state.Drafts==null)state.Drafts=new Dictionary<string,DraftViewState>();if(state.CollapsedCategories==null)state.CollapsedCategories=new List<string>();savedJson=file==path?json.Serialize(state):null;return state;}catch{}
             }
             return new WindowViewState();
         }

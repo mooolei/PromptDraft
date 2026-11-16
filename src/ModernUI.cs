@@ -37,8 +37,19 @@ namespace PromptDraft {
         }
     }
     class Surface:Panel {
-        public Surface(){BackColor=Color.White;Padding=new Padding(14);DoubleBuffered=true;}
-        protected override void OnPaint(PaintEventArgs e){base.OnPaint(e);using(var p=new Pen(Palette.Line))e.Graphics.DrawRectangle(p,0,0,Width-1,Height-1);}
+        public Surface(){BackColor=Color.White;Padding=new Padding(14);DoubleBuffered=true;SetStyle(ControlStyles.ResizeRedraw,true);}
+        protected override void OnPaintBackground(PaintEventArgs e){using(var b=new SolidBrush(BackColor))e.Graphics.FillRectangle(b,e.ClipRectangle);}
+        protected override void OnPaint(PaintEventArgs e){base.OnPaint(e);if(Width>0&&Height>0)using(var p=new Pen(Palette.Line))e.Graphics.DrawRectangle(p,0,0,Width-1,Height-1);}
+        protected override void OnLayout(LayoutEventArgs e){
+            base.OnLayout(e);
+            if(Controls.Count!=1)return;
+            var box=Controls[0] as TextBox;
+            if(box==null||box.Multiline)return;
+            // Native single-line edits have their own preferred height. Do not stretch
+            // them into the custom border; center them and repaint the whole frame on resize.
+            box.Dock=DockStyle.None;box.AutoSize=true;
+            box.SetBounds(Padding.Left,Math.Max(1,(ClientSize.Height-box.PreferredHeight)/2),Math.Max(1,ClientSize.Width-Padding.Horizontal),box.PreferredHeight);
+        }
     }
     public static class RichClipboard {
         public static string HtmlFormat(string html) {
@@ -86,7 +97,7 @@ namespace PromptDraft {
             base.WndProc(ref message);
         }
     }
-    public class MainForm:Form {
+    public partial class MainForm:Form {
         readonly DraftStore store; readonly DraftState data;
         readonly ViewStateStore viewStore; readonly WindowViewState viewState;
         TextBox search,titleBox,agentBox,editor;
@@ -118,7 +129,7 @@ namespace PromptDraft {
             Resize+=delegate{if(windowReady&&WindowState!=FormWindowState.Minimized)viewState.Maximized=WindowState==FormWindowState.Maximized;};
             copyTimer.Tick+=delegate{copyTimer.Stop();UpdateCopyButtons();};
             FormClosing+=delegate(object s,FormClosingEventArgs e){SaveViewState();if(!SaveNow()){e.Cancel=true;MessageBox.Show(this,"保存未成功，窗口将保持打开。请检查文件夹权限或磁盘空间，再按 Ctrl+S 重试。\n\n"+store.FilePath,"草稿尚未保存",MessageBoxButtons.OK,MessageBoxIcon.Warning);}};
-            FormClosed+=delegate{viewTimer.Dispose();saveTimer.Dispose();previewTimer.Dispose();copyTimer.Dispose();};
+            FormClosed+=delegate{viewTimer.Dispose();saveTimer.Dispose();previewTimer.Dispose();copyTimer.Dispose();sidebarTip.Dispose();groupMenu.Dispose();};
             if(data.Drafts.Count==0){var d=new Draft();data.Drafts.Add(d);data.SelectedId=d.Id;dirty=true;}
             var selected=data.Drafts.FirstOrDefault(d=>d.Id==data.SelectedId)??data.Drafts[0];
             kind=selected.Kind??"prompt";showArchived=selected.Archived;showTrash=selected.Deleted;RefreshList(selected.Id);
@@ -130,10 +141,10 @@ namespace PromptDraft {
         TableLayoutPanel Grid(int columns,int rows){var t=new TableLayoutPanel{Dock=DockStyle.Fill,ColumnCount=columns,RowCount=rows,Margin=new Padding(0),BackColor=Color.Transparent};if(columns==1)t.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));if(rows==1)t.RowStyles.Add(new RowStyle(SizeType.Percent,100));return t;}
         Control Frame(Control control,Padding padding){var p=new Surface{Dock=DockStyle.Fill,Padding=padding,Margin=new Padding(0)};p.Controls.Add(control);return p;}
         void BuildUI() {
-            var root=Grid(2,1);root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,280));root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));Controls.Add(root);
-            var side=Grid(1,9);side.BackColor=Palette.Side;side.Padding=new Padding(20,24,20,16);
+            var root=Grid(2,1);root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,340));root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));Controls.Add(root);
+            var side=Grid(1,10);side.BackColor=Palette.Side;side.Padding=new Padding(20,24,16,16);
             foreach(int h in new[]{64,44,62,27,42,56})side.RowStyles.Add(new RowStyle(SizeType.Absolute,h));
-            side.RowStyles.Add(new RowStyle(SizeType.Percent,100));side.RowStyles.Add(new RowStyle(SizeType.Absolute,30));side.RowStyles.Add(new RowStyle(SizeType.Absolute,27));root.Controls.Add(side,0,0);
+            side.RowStyles.Add(new RowStyle(SizeType.Absolute,36));side.RowStyles.Add(new RowStyle(SizeType.Percent,100));side.RowStyles.Add(new RowStyle(SizeType.Absolute,30));side.RowStyles.Add(new RowStyle(SizeType.Absolute,27));root.Controls.Add(side,0,0);
             var brand=Grid(2,1);brand.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,44));brand.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
             var logo=new PictureBox{Dock=DockStyle.Fill,SizeMode=PictureBoxSizeMode.CenterImage};
             using(var imageStream=Assembly.GetExecutingAssembly().GetManifestResourceStream("PromptDraft.App.png"))if(imageStream!=null)using(var loadedImage=Image.FromStream(imageStream))logo.Image=new Bitmap(loadedImage,new Size(32,32));
@@ -144,15 +155,15 @@ namespace PromptDraft {
             promptCategory=Btn("Prompt 草稿");clipCategory=Btn("AI 收藏");clipCategory.Margin=new Padding(6,0,0,0);
             promptCategory.Click+=delegate{SwitchCategory("prompt");};clipCategory.Click+=delegate{SwitchCategory("clip");};categories.Controls.Add(promptCategory,0,0);categories.Controls.Add(clipCategory,1,0);side.Controls.Add(categories,0,1);
             add=Btn("＋  新建草稿",true);add.Margin=new Padding(0,14,0,6);add.Click+=delegate{NewDraft();};side.Controls.Add(add,0,2);
-            side.Controls.Add(L("搜索标题、正文或 Agent",9,Palette.Muted),0,3);
+            side.Controls.Add(L("搜索标题、正文、Agent 或分类",9,Palette.Muted),0,3);
             search=Input("搜索草稿与收藏");search.TextChanged+=delegate{RefreshList(current==null?null:current.Id);};side.Controls.Add(Frame(search,new Padding(12,10,12,7)),0,4);
             var filters=Grid(3,1);for(int i=0;i<3;i++)filters.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,33.33F));filters.Padding=new Padding(0,13,0,9);
             activeTab=Btn("草稿");archiveTab=Btn("已归档");trashTab=Btn("回收站");archiveTab.Margin=new Padding(4,0,4,0);
             activeTab.Click+=delegate{SetArchiveView(false);};archiveTab.Click+=delegate{SetArchiveView(true);};trashTab.Click+=delegate{showTrash=true;RefreshList(null);};
             filters.Controls.Add(activeTab,0,0);filters.Controls.Add(archiveTab,1,0);filters.Controls.Add(trashTab,2,0);side.Controls.Add(filters,0,5);
-            list=new ListBox{Dock=DockStyle.Fill,BorderStyle=BorderStyle.None,BackColor=Palette.Side,IntegralHeight=false,DrawMode=DrawMode.OwnerDrawFixed,ItemHeight=92,AccessibleName="草稿列表",Margin=new Padding(0)};
-            list.DrawItem+=DrawDraft;list.SelectedIndexChanged+=delegate{if(!refreshing)SelectDraft(list.SelectedItem as Draft);};side.Controls.Add(list,0,6);
-            listCount=L("",9,Palette.Muted);side.Controls.Add(listCount,0,7);side.Controls.Add(L("●  仅保存在这台电脑",9,Palette.Green),0,8);
+            list=new ListBox{Dock=DockStyle.Fill,BorderStyle=BorderStyle.None,BackColor=Palette.Side,IntegralHeight=false,DrawMode=DrawMode.OwnerDrawVariable,AccessibleName="按分类展开的草稿列表",Margin=new Padding(0)};
+            list.DrawItem+=DrawDraft;list.SelectedIndexChanged+=delegate{if(!refreshing&&list.SelectedItem is Draft)SelectDraft((Draft)list.SelectedItem);};InitializeSidebar(side);side.Controls.Add(list,0,7);
+            listCount=L("",9,Palette.Muted);side.Controls.Add(listCount,0,8);side.Controls.Add(L("●  仅保存在这台电脑",9,Palette.Green),0,9);
             var right=Grid(1,3);right.Padding=new Padding(30,24,30,14);right.RowStyles.Add(new RowStyle(SizeType.Absolute,66));right.RowStyles.Add(new RowStyle(SizeType.Percent,100));right.RowStyles.Add(new RowStyle(SizeType.Absolute,35));root.Controls.Add(right,1,0);
             var heading=Grid(1,2);heading.RowStyles.Add(new RowStyle(SizeType.Absolute,33));heading.RowStyles.Add(new RowStyle(SizeType.Percent,100));sectionTitle=L("Prompt 草稿",17,Palette.Ink);sectionHint=L("写好，再复制。",9.5F,Palette.Muted);heading.Controls.Add(sectionTitle,0,0);heading.Controls.Add(sectionHint,0,1);right.Controls.Add(heading,0,0);
             var bodyHost=new Panel{Dock=DockStyle.Fill,Margin=new Padding(0)};right.Controls.Add(bodyHost,0,1);content=new Panel{Dock=DockStyle.Fill};bodyHost.Controls.Add(content);
@@ -160,7 +171,7 @@ namespace PromptDraft {
             var titleRow=Grid(2,1);titleRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));titleRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,100));titleRow.Padding=new Padding(0,0,0,9);
             titleBox=Input("草稿标题");titleBox.Font=new Font(Font.FontFamily,17,FontStyle.Bold);var titleFrame=Frame(titleBox,new Padding(16,13,16,11));titleRow.Controls.Add(titleFrame,0,0);
             pin=Btn("☆  置顶");pin.Margin=new Padding(10,6,0,6);pin.Click+=delegate{TogglePin();};titleRow.Controls.Add(pin,1,0);layout.Controls.Add(titleRow,0,0);
-            var agentRow=Grid(2,1);agentRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,106));agentRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));agentRow.Padding=new Padding(0,2,0,9);agentRow.Controls.Add(L("Agent / 来源",9.5F,Palette.Muted),0,0);agentBox=Input("Agent 或来源名称");agentRow.Controls.Add(Frame(agentBox,new Padding(12,9,12,5)),1,0);layout.Controls.Add(agentRow,0,1);
+            var agentRow=Grid(4,1);agentRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,96));agentRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,50));agentRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,54));agentRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,50));agentRow.Padding=new Padding(0,2,0,9);agentRow.Controls.Add(L("Agent / 来源",9.5F,Palette.Muted),0,0);agentBox=Input("Agent 或来源名称");agentRow.Controls.Add(Frame(agentBox,new Padding(12,9,12,5)),1,0);var categoryLabel=L("分类",9.5F,Palette.Muted);categoryLabel.Padding=new Padding(12,0,0,0);agentRow.Controls.Add(categoryLabel,2,0);InitializeCategoryInput(agentRow);layout.Controls.Add(agentRow,0,1);
             var editorBar=Grid(2,1);editorBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));editorBar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,228));editorBar.Padding=new Padding(0,5,0,9);bodyLabel=L("正文",10,Palette.Muted);editorBar.Controls.Add(bodyLabel,0,0);
             viewTools=new Panel{Dock=DockStyle.Fill};var modes=Grid(3,1);for(int i=0;i<3;i++)modes.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,33.33F));readView=Btn("阅读");editView=Btn("编辑");splitView=Btn("对照");editView.Margin=new Padding(4,0,4,0);readView.Click+=delegate{SetView("read");};editView.Click+=delegate{SetView("edit");};splitView.Click+=delegate{SetView("split");};modes.Controls.Add(readView,0,0);modes.Controls.Add(editView,1,0);modes.Controls.Add(splitView,2,0);viewTools.Controls.Add(modes);editorBar.Controls.Add(viewTools,1,0);layout.Controls.Add(editorBar,0,2);
             editorSplit=new SplitContainer{Dock=DockStyle.Fill,Margin=new Padding(0),BackColor=Palette.Canvas,SplitterWidth=14,Panel1MinSize=0,Panel2MinSize=0};layout.Controls.Add(editorSplit,0,3);
@@ -193,7 +204,9 @@ namespace PromptDraft {
             RestoreDraftPosition();
         }
         void DrawDraft(object sender,DrawItemEventArgs e) {
-            if(e.Index<0)return;var d=(Draft)list.Items[e.Index];bool selected=(e.State&DrawItemState.Selected)!=0;
+            if(e.Index<0||e.Index>=list.Items.Count)return;
+            var header=list.Items[e.Index] as CategoryHeader;if(header!=null){DrawCategory(header,e);return;}
+            var d=(Draft)list.Items[e.Index];bool selected=(e.State&DrawItemState.Selected)!=0;
             // Owner-drawn rows share the list's drawing surface. Clear only this row.
             using(var background=new SolidBrush(Palette.Side))e.Graphics.FillRectangle(background,e.Bounds);
             e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;var card=new Rectangle(e.Bounds.X,e.Bounds.Y+3,e.Bounds.Width-1,e.Bounds.Height-6);
@@ -201,24 +214,26 @@ namespace PromptDraft {
             if(selected)using(var p=new Pen(Palette.Green,3))e.Graphics.DrawLine(p,card.Left+2,card.Top+15,card.Left+2,card.Bottom-15);
             Rectangle r=e.Bounds;r.Inflate(-13,-10);var flags=TextFormatFlags.EndEllipsis|TextFormatFlags.SingleLine|TextFormatFlags.NoPrefix;
             string title=d.DisplayTitle;if(d.Kind=="clip")title=title.TrimStart('#',' ');
-            using(var f=new Font(Font.FontFamily,10.5F,FontStyle.Bold))TextRenderer.DrawText(e.Graphics,title,f,new Rectangle(r.X,r.Y,r.Width-(d.Pinned?22:0),23),Palette.Ink,flags);
-            if(d.Pinned)TextRenderer.DrawText(e.Graphics,"★",Font,new Rectangle(r.Right-22,r.Y,22,23),Palette.Green,flags);
-            string excerpt=d.Body.Replace("\r"," ").Replace("\n"," ");TextRenderer.DrawText(e.Graphics,String.IsNullOrWhiteSpace(excerpt)?"开始写下你的想法…":excerpt,Font,new Rectangle(r.X,r.Y+26,r.Width,22),Palette.Muted,flags);
-            using(var f=new Font(Font.FontFamily,8.5F))TextRenderer.DrawText(e.Graphics,(String.IsNullOrWhiteSpace(d.Agent)?"未分组":d.Agent)+" · "+d.Updated.ToString("MM-dd HH:mm"),f,new Rectangle(r.X,r.Y+52,r.Width,19),Palette.Muted,flags);
+            int line=Font.Height+2;
+            using(var f=new Font(Font.FontFamily,10.5F,FontStyle.Bold))TextRenderer.DrawText(e.Graphics,title,f,new Rectangle(r.X,r.Y,Math.Max(1,r.Width-(d.Pinned?22:0)),line*2),Palette.Ink,TextFormatFlags.EndEllipsis|TextFormatFlags.WordBreak|TextFormatFlags.NoPrefix);
+            if(d.Pinned)TextRenderer.DrawText(e.Graphics,"★",Font,new Rectangle(r.Right-22,r.Y,22,line),Palette.Green,flags);
+            string excerpt=d.Body.Replace("\r"," ").Replace("\n"," ");TextRenderer.DrawText(e.Graphics,String.IsNullOrWhiteSpace(excerpt)?"开始写下你的想法…":excerpt,Font,new Rectangle(r.X,r.Y+line*2+3,r.Width,line),Palette.Muted,flags);
+            using(var f=new Font(Font.FontFamily,8.5F))TextRenderer.DrawText(e.Graphics,(String.IsNullOrWhiteSpace(d.Agent)?"未填写来源":d.Agent)+" · "+d.Updated.ToString("MM-dd HH:mm"),f,new Rectangle(r.X,r.Bottom-line,r.Width,line),Palette.Muted,flags);
         }
         void RefreshList(string selectId) {
-            refreshing=true;list.BeginUpdate();list.Items.Clear();string q=search.Text.Trim();
-            foreach(var d in data.Drafts.Where(d=>(d.Kind??"prompt")==kind&&(showTrash?d.Deleted:!d.Deleted&&d.Archived==showArchived)&&(q.Length==0||(d.Title+"\n"+d.Agent+"\n"+d.Body).IndexOf(q,StringComparison.OrdinalIgnoreCase)>=0)).OrderByDescending(d=>d.Pinned).ThenByDescending(d=>d.Updated))list.Items.Add(d);
-            list.SelectedItem=list.Items.Cast<Draft>().FirstOrDefault(d=>d.Id==selectId);if(list.SelectedIndex<0&&list.Items.Count>0)list.SelectedIndex=0;list.EndUpdate();refreshing=false;
+            string q=search.Text.Trim();
+            var matches=data.Drafts.Where(d=>(d.Kind??"prompt")==kind&&(showTrash?d.Deleted:!d.Deleted&&d.Archived==showArchived)&&(q.Length==0||(d.Title+"\n"+d.Agent+"\n"+d.Body+"\n"+CategoryNames.Display(d.Category)).IndexOf(q,StringComparison.OrdinalIgnoreCase)>=0)).OrderByDescending(d=>d.Pinned).ThenByDescending(d=>d.Updated).ToList();
+            Draft selected=matches.FirstOrDefault(d=>d.Id==selectId)??matches.FirstOrDefault();
+            refreshing=true;list.BeginUpdate();list.Items.Clear();BuildCategoryRows(matches,q.Length>0);list.SelectedItem=selected;list.EndUpdate();refreshing=false;UpdateCategoryChoices();
             activeTab.Selected=!showArchived&&!showTrash;archiveTab.Selected=showArchived&&!showTrash;trashTab.Selected=showTrash;promptCategory.Selected=kind=="prompt";clipCategory.Selected=kind=="clip";
             foreach(var b in new[]{activeTab,archiveTab,trashTab,promptCategory,clipCategory})b.Invalidate();
             activeTab.Text=kind=="clip"?"收藏":"草稿";add.Text=kind=="clip"?"＋  新建收藏":"＋  新建草稿";sectionTitle.Text=kind=="clip"?"AI 收藏":"Prompt 草稿";
             sectionHint.Text=kind=="clip"?"留下值得再读的回答，随时复制使用。":"写好，再复制。每段思路都有自己的位置。";
-            listCount.Text=list.Items.Count+" 条"+(showTrash?" · 回收站":showArchived?" · 已归档":"");SelectDraft(list.SelectedItem as Draft);
+            listCount.Text=matches.Count+" 条"+(q.Length>0?" · 搜索结果":showTrash?" · 回收站":showArchived?" · 已归档":"")+" · "+list.Items.OfType<CategoryHeader>().Count()+" 个分类";SelectDraft(selected);
         }
         void SelectDraft(Draft d) {
             if(current==d&&d!=null)return;CaptureDraftView();viewStore.Save(viewState);
-            current=d;binding=true;titleBox.Text=d==null?"":d.Title;agentBox.Text=d==null?"":d.Agent;editor.Text=d==null?"":d.Body;content.Visible=d!=null;empty.Visible=d==null;
+            current=d;binding=true;titleBox.Text=d==null?"":d.Title;agentBox.Text=d==null?"":d.Agent;editor.Text=d==null?"":d.Body;categoryBox.Text=d==null?"":CategoryNames.Display(d.Category);categoryBox.SelectionLength=0;categoryBox.Enabled=d!=null&&!d.Deleted;if(d!=null)selectedCategory=CategoryNames.Clean(d.Category);content.Visible=d!=null;empty.Visible=d==null;
             if(d!=null){archive.Text=d.Deleted?"恢复":d.Archived?"取消归档":"归档";delete.Text=d.Deleted?"彻底删除":"删除";titleBox.ReadOnly=agentBox.ReadOnly=editor.ReadOnly=d.Deleted;UpdatePin();string savedMode=viewState.For(d.Id).Mode;SetView(savedMode=="read"||savedMode=="edit"||savedMode=="split"?savedMode:d.Kind=="clip"&&d.Body.Length>0?"read":d.Kind=="clip"?"split":"edit");if(data.SelectedId!=d.Id){data.SelectedId=d.Id;dirty=true;saveTimer.Start();}}
             binding=false;UpdateCount();UpdateCopyButtons();
         }
@@ -230,8 +245,8 @@ namespace PromptDraft {
             if(binding||current==null)return;current.Title=titleBox.Text;current.Agent=agentBox.Text;current.Body=editor.Text;current.Updated=DateTime.Now;dirty=true;status.Text="正在保存…";status.ForeColor=Palette.Muted;saveTimer.Stop();saveTimer.Start();list.Invalidate();UpdateCount();
             if(sender==editor&&current.Kind=="clip"){previewReady=false;previewTimer.Stop();previewTimer.Start();}UpdateCopyButtons();
         }
-        bool SaveNow(){if(windowReady)SaveViewState();if(!dirty)return true;try{store.Save(data);dirty=false;status.ForeColor=Palette.Muted;status.Text="●  已保存在本地  "+DateTime.Now.ToString("HH:mm:ss");return true;}catch{status.ForeColor=Color.Firebrick;status.Text="保存失败 · Ctrl+S 重试";return false;}}
-        void NewDraft(){string agent=current==null?"":current.Agent;var d=new Draft{Agent=agent,Kind=kind};data.Drafts.Add(d);dirty=true;showArchived=false;showTrash=false;search.Text="";RefreshList(d.Id);SaveNow();SetView(kind=="clip"?"split":"edit");editor.Focus();}
+        bool SaveNow(){CommitCategory();if(windowReady)SaveViewState();if(!dirty)return true;try{store.Save(data);dirty=false;status.ForeColor=Palette.Muted;status.Text="●  已保存在本地  "+DateTime.Now.ToString("HH:mm:ss");return true;}catch{status.ForeColor=Color.Firebrick;status.Text="保存失败 · Ctrl+S 重试";return false;}}
+        void NewDraft(){CommitCategory();string agent=current==null?"":current.Agent;var d=new Draft{Agent=agent,Kind=kind,Category=selectedCategory};data.Drafts.Add(d);viewState.CollapsedCategories.Remove(GroupKey(d.Category));dirty=true;showArchived=false;showTrash=false;search.Text="";RefreshList(d.Id);SaveNow();SetView(kind=="clip"?"split":"edit");editor.Focus();}
         void SetArchiveView(bool value){showArchived=value;showTrash=false;RefreshList(current==null?null:current.Id);}
         void ArchiveCurrent(){if(current==null)return;if(current.Deleted)current.Deleted=false;else current.Archived=!current.Archived;dirty=true;RefreshList(null);SaveNow();}
         void DeleteCurrent(){if(current==null)return;if(current.Deleted){if(MessageBox.Show(this,"彻底删除这条内容？删除后无法从回收站恢复。","彻底删除",MessageBoxButtons.YesNo,MessageBoxIcon.Warning,MessageBoxDefaultButton.Button2)!=DialogResult.Yes)return;data.Drafts.Remove(current);viewState.Drafts.Remove(current.Id);}else current.Deleted=true;dirty=true;RefreshList(null);SaveNow();}

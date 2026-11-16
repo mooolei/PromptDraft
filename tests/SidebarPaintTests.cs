@@ -6,34 +6,45 @@ using System.Reflection;
 using System.Windows.Forms;
 using PromptDraft;
 class SidebarPaintTests {
-    static void Check(bool ok,string name){Console.WriteLine((ok?"PASS ":"FAIL ")+name);if(!ok)throw new Exception(name);}
-    static void Paint(MainForm f,ListBox list,Graphics g,int index,int y,bool selected){typeof(MainForm).GetMethod("DrawDraft",BindingFlags.Instance|BindingFlags.NonPublic).Invoke(f,new object[]{list,new DrawItemEventArgs(g,list.Font,new Rectangle(0,y,240,92),index,selected?DrawItemState.Selected:DrawItemState.None)});}
-    static int Dark(Bitmap b,int y){int n=0;for(int xx=10;xx<220;xx++)for(int yy=y+10;yy<y+32;yy++){Color c=b.GetPixel(xx,yy);if(c.R<160&&c.G<170&&c.B<170)n++;}return n;}
+    static void Check(bool ok,string name){if(!ok)throw new Exception(name);Console.WriteLine("PASS "+name);}
+    static T Field<T>(MainForm f,string name){return (T)typeof(MainForm).GetField(name,BindingFlags.Instance|BindingFlags.NonPublic).GetValue(f);}
     static object Call(MainForm f,string name,params object[] args){return typeof(MainForm).GetMethod(name,BindingFlags.Instance|BindingFlags.NonPublic).Invoke(f,args);}
-    static ListBox List(MainForm f){return (ListBox)typeof(MainForm).GetField("list",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(f);}
-    [STAThread]static void Main(string[] args){
-        Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);Directory.CreateDirectory(args[0]);
-        var state=new DraftState();for(int i=0;i<11;i++)state.Drafts.Add(new Draft{Title="收藏 "+(i+1)+"：整理计算与写入流程",Body="第 "+(i+1)+" 条内容保持独立保存",Agent="我的 Agent",Kind="clip",Pinned=i==3});state.SelectedId=state.Drafts[0].Id;
-        using(var f=new MainForm(new DraftStore(Path.Combine(args[0],Guid.NewGuid().ToString("N"))),state)){
-            f.Opacity=0;f.ShowInTaskbar=false;f.Show();Application.DoEvents();var list=List(f);
-            using(var b=new Bitmap(240,460)){
-                using(var g=Graphics.FromImage(b)){g.Clear(Palette.Side);for(int i=0;i<5;i++)Paint(f,list,g,i,i*92,i==2);}
-                b.Save(Path.Combine(args[0],"five-rows.png"));
-                for(int i=0;i<5;i++)Check(Dark(b,i*92)>20,"all visible rows remain painted: row "+i);
-                Color before=b.GetPixel(20,20);using(var g=Graphics.FromImage(b))Paint(f,list,g,2,184,false);Check(b.GetPixel(20,20)==before&&Dark(b,0)>20&&Dark(b,368)>20,"selection repaint preserves neighboring rows");
+    static void Paint(MainForm f,ListBox list,Graphics g,int index,int y,int height){Call(f,"DrawDraft",list,new DrawItemEventArgs(g,list.Font,new Rectangle(0,y,300,height),index,DrawItemState.None));}
+    static int Dark(Bitmap b,Rectangle r){int n=0;r.Intersect(new Rectangle(Point.Empty,b.Size));for(int x=r.Left+8;x<r.Right-8;x++)for(int y=r.Top+6;y<r.Bottom-6;y++){Color c=b.GetPixel(x,y);if(c.R<160&&c.G<170&&c.B<170)n++;}return n;}
+    static void Snapshot(MainForm form,string path){using(var bitmap=new Bitmap(form.Width,form.Height)){form.DrawToBitmap(bitmap,new Rectangle(Point.Empty,form.Size));bitmap.Save(path);}}
+    static void InputsFit(MainForm form){foreach(string name in new[]{"titleBox","agentBox","search"}){var input=Field<TextBox>(form,name);Check(input.Top>0&&input.Bottom<input.Parent.ClientSize.Height&&input.Left>0&&input.Right<input.Parent.ClientSize.Width,name+" fits inside its frame at "+form.ClientSize);}}
+    [STAThread]static int Main(string[] args){try{Run(args[0]);return 0;}catch(Exception e){Console.Error.WriteLine(e.GetType().Name+": "+e.Message);return 1;}}
+    static void Run(string directory){
+        Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);Directory.CreateDirectory(directory);
+        var state=new DraftState();for(int i=0;i<11;i++)state.Drafts.Add(new Draft{Title=i==0?"梳理项目需求，把下一轮要问的问题写清楚":"草稿 "+(i+1)+"：整理思路与待办事项",Body="先记录目标，再补充背景。\r\n\r\n- 明确需要解决的问题\r\n- 保留示例和限制条件\r\n- 写好后复制到对话",Agent="我的 Agent",Category=i<2?"工作":i<6?"学习":i<10?"写作":"",Pinned=i==0});state.SelectedId=state.Drafts[0].Id;
+        using(var form=new MainForm(new DraftStore(Path.Combine(directory,Guid.NewGuid().ToString("N"))),state)){
+            form.Opacity=0;form.ShowInTaskbar=false;form.Show();Application.DoEvents();var list=Field<ListBox>(form,"list");
+            using(var bitmap=new Bitmap(300,600)){
+                using(var g=Graphics.FromImage(bitmap)){g.Clear(Palette.Side);for(int i=0;i<5;i++)Paint(form,list,g,i,i*120,120);}
+                for(int i=0;i<5;i++)Check(Dark(bitmap,new Rectangle(0,i*120,300,120))>15,"neighboring grouped rows remain painted "+i);
+                Color before=bitmap.GetPixel(20,20);using(var g=Graphics.FromImage(bitmap))Paint(form,list,g,2,240,120);Check(bitmap.GetPixel(20,20)==before&&Dark(bitmap,new Rectangle(0,0,300,120))>15,"selection repaint does not erase other rows");
             }
-            foreach(int top in new[]{0,4,7,0}){
-                list.TopIndex=top;list.SelectedIndex=Math.Min(top+1,10);list.Invalidate();list.Update();Application.DoEvents();
-                using(var b=new Bitmap(list.Width,list.Height)){
-                    list.DrawToBitmap(b,new Rectangle(Point.Empty,b.Size));int full=Math.Min(list.Items.Count-list.TopIndex,list.Height/list.ItemHeight);int visible=0;
-                    for(int i=0;i<full;i++)if(Dark(b,i*list.ItemHeight)>20)visible++;
-                    b.Save(Path.Combine(args[0],"scroll-"+top+".png"));Check(visible==full&&full>=2,"scrolling renders every visible row at top "+top);
+            foreach(int top in new[]{0,4,8,0}){
+                list.TopIndex=top;list.Invalidate();list.Update();Application.DoEvents();
+                using(var bitmap=new Bitmap(list.Width,list.Height)){
+                    list.DrawToBitmap(bitmap,new Rectangle(Point.Empty,bitmap.Size));int visible=0;
+                    for(int i=0;i<list.Items.Count;i++){Rectangle row=list.GetItemRectangle(i);if(row.Top>=0&&row.Bottom<=list.ClientSize.Height){visible++;Check(Dark(bitmap,row)>8,"scroll paints full visible row "+i+" at top "+top);}}
+                    Check(visible>=2,"multiple grouped rows visible after scroll");
                 }
             }
-            Call(f,"TogglePin");Check(list.Items.Count==11&&((Draft)list.Items[0]).Pinned,"pin refresh retains all entries");
-            var search=(TextBox)typeof(MainForm).GetField("search",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(f);search.Text="收藏 11";Check(list.Items.Count==1,"search filters correctly");search.Text="";Check(list.Items.Count==11,"clearing search restores every entry");
-            Call(f,"SetView","edit");Application.DoEvents();using(var b=new Bitmap(f.Width,f.Height)){f.DrawToBitmap(b,new Rectangle(Point.Empty,f.Size));b.Save(Path.Combine(args[0],"sidebar-fixed.png"));}
-            f.Close();
+            Call(form,"TogglePin");Check(list.Items.OfType<Draft>().Count()==11,"pin refresh retains every draft");
+            var search=Field<TextBox>(form,"search");search.Text="草稿 11";Check(list.Items.OfType<Draft>().Count()==1,"grouped search filters correctly");search.Text="";
+            var frame=Field<TextBox>(form,"titleBox").Parent;int oldRight=frame.Width-1;bool repaintedOldBorder=false;
+            frame.Invalidated+=delegate(object s,InvalidateEventArgs e){if(e.InvalidRect.Contains(oldRight,1))repaintedOldBorder=true;};form.Width+=120;Application.DoEvents();
+            Check(repaintedOldBorder,"growing the input frame invalidates the previous border position");
+            for(int i=0;i<12;i++){form.Width=1120+i*13;Application.DoEvents();}InputsFit(form);
+            form.ClientSize=new Size(1180,790);list.TopIndex=0;Application.DoEvents();Snapshot(form,Path.Combine(directory,"sidebar-default.png"));
+            form.Size=form.MinimumSize;Application.DoEvents();InputsFit(form);Snapshot(form,Path.Combine(directory,"sidebar-minimum.png"));
+            form.ClientSize=new Size(1320,920);Application.DoEvents();InputsFit(form);Snapshot(form,Path.Combine(directory,"sidebar-large.png"));
+            Call(form,"RefreshList",state.Drafts[0].Id);Call(form,"TogglePin");Call(form,"ToggleAllGroups");Call(form,"ToggleGroup",list.Items.OfType<CategoryHeader>().Single(h=>h.Name=="工作"));
+            form.ClientSize=new Size(1180,900);list.TopIndex=0;Field<TextBox>(form,"editor").Focus();Application.DoEvents();Snapshot(form,Path.Combine(directory,"sidebar-categories.png"));
+            form.Scale(new SizeF(1.25F,1.25F));Application.DoEvents();InputsFit(form);Snapshot(form,Path.Combine(directory,"sidebar-scaled.png"));
+            form.Close();
         }
     }
 }

@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.3.0
+
+- Fix stale border fragments around title, source and search inputs during window resizing; center single-line editors inside their frames.
+- Add custom categories with expandable sidebar groups and persistent collapse state.
+- Create, move, rename and remove categories while preserving all records, including archived and deleted items.
+- Search category names and find entries inside collapsed groups without discarding saved collapse preferences.
+- Widen the sidebar to 340 pixels, show two-line titles and expose full titles in tooltips.
+- Preserve compatibility with existing unclassified records and add category, layout and paint regression tests.
+
 ## 1.2.2
 
 - Preserve LF, CRLF and CR line endings when pasting into prompts and AI collections.
